@@ -13,9 +13,19 @@ from sklearn.preprocessing import OneHotEncoder,StandardScaler
 import pickle
 Experience = namedtuple("Experience",["state", "action", "reward", "next_state", "done"])
 class QLearningNnAgent:
+    """
+    Q-Learningのエージェント.
+    NNを使うためにExperience Replay機能を実装する.
+    Fixed Target Q-Netwrok.
+    """
     def __init__(self,epsilon=0.1,buffer_size=1024,batch_size=64):
+        """
+        コンストラクタ.
+        epsilon:epsilon-greedy法のepsilon. ここで指定した割合だけ探索的行動をする.
+        buffer_size:Experience Replayのため,バッファしておく経験の量.
+        batch_size:一度の学習で使用する経験のサイズ.
+        """
         self.epsilon = epsilon
-        self.reward_log = []
         self.estimate_probs = False
         self.initialized = False
         self.model = None
@@ -31,7 +41,7 @@ class QLearningNnAgent:
             ary.append([(j+i)%9 for j in range(9)])
         enc=OneHotEncoder(sparse=False)
         enc.fit(ary)
-        estimator = MLPRegressor(hidden_layer_sizes=(1024,512), max_iter=1)
+        estimator = MLPRegressor(hidden_layer_sizes=(512,512), max_iter=1)
         self.model = Pipeline([("preprocessing", enc), ("estimator", estimator)])
         """
         # OneHoeエンコーディングしない
@@ -47,6 +57,11 @@ class QLearningNnAgent:
         self.initialized = True
 
     def policy(self,state,actions):
+        """
+        epsilon-greedy法で決定した行動を返す.
+        epsilonの割合だけランダムに行動を決める.
+        それ以外は過去の経験から算出した価値の高い行動を取る.
+        """
         if np.random.random() < self.epsilon or not self.initialized:
             return np.random.randint(len(actions))
         else:
@@ -56,6 +71,13 @@ class QLearningNnAgent:
                 return action
             else:
                 return np.argmax(estimates)
+
+    def estimate(self, s):
+        """
+        self.policy内で使用する.
+        """
+        estimated = self.model.predict([s])[0]
+        return estimated
 
     def learn(self,env,episode_count=100,gamma=0.9,learning_rate=0.1,render=False,report_interval=50):
         """
@@ -67,8 +89,9 @@ class QLearningNnAgent:
         shuffle_count = 3
         win_ratio = 0
         reward_ary = deque(maxlen=50)
-        for e in range(episode_count):
-            if win_ratio>.8:
+        self.log_ary = []
+        for i in range(episode_count):
+            if win_ratio > 0.9:
                 reward_ary = deque(maxlen=50)
                 shuffle_count+=1
             state = env.reset(shuffle_count)
@@ -94,50 +117,34 @@ class QLearningNnAgent:
 
                 state = next_state
                 if action_count >= min(shuffle_count*2,100):break
-            self.log(reward)
             reward_ary.append(reward)
             win_ratio = sum(reward_ary)/50
-            print(e,reward,shuffle_count,round(win_ratio,3),action_count)
+            self.log_ary.append([i,reward,win_ratio,shuffle_count,info["step_count"]])
+            print(self.log_ary[-1])
         self.save_model()
-
-    def solve(self,env):
-        self.read_model()
-        actions = list(range(len(env.actions)))
-        state = env.get_state()
-        done = False
-        action_count = 0
-        route = []
-        route.append(state.copy())
-        while not done:
-            action = self.policy(state, actions)
-            next_state, done = env.step(action)
-            action_count += 1
-            state = next_state
-            if action_count >= 300:break
-        if done:
-            return route
-        else:
-            print("not solved.")
-            return []
-
-    def log(self,reward):
-        self.reward_log.append(reward)
+        self.output_log()
+    
+    def output_log(self,):
+        """
+        log_aryを出力する.
+        """
+        current_dir = os.path.dirname(__file__)
+        with open(os.path.join(current_dir,"q_learning.json"),"w") as f:
+            f.write(json.dumps(self.log_ary))
 
     def save_model(self,):
+        """
+        モデルを保存する.
+        """
         current_dir = os.path.dirname(__file__)
-        with open(os.path.join(current_dir,"model_q_nn.pkl"),"wb") as f:
-            pickle.dump(self.model,f)
-        pass
+        pickle.dump(self.model, open(os.path.join(current_dir,"model_q_nn.pkl"),"wb"))
 
     def read_model(self,):
-        pass
-
-    def estimate(self, s):
         """
-        self.policy内で使用する.
+        モデルを読み込む.
         """
-        estimated = self.model.predict([s])[0]
-        return estimated
+        current_dir = os.path.dirname(__file__)
+        self.model = pickle.load(open(os.path.join(current_dir,"model_q_nn.pkl"),"rb"))
 
     def _predict(self, states):# 各状態における、各行動の価値を予測し、返す。
         """
@@ -153,6 +160,7 @@ class QLearningNnAgent:
 
     def update(self, experiences, gamma):
         """
+        学習する.
         """
         states = np.vstack([e.state for e in experiences])
         next_states = np.vstack([e.next_state for e in experiences])
@@ -165,7 +173,6 @@ class QLearningNnAgent:
             if not e.done:
                 reward += gamma * np.max(future[i]) # n_sが終了状態でない場合、新しい状態の予測価値に割引率をかけたものを加算
             estimateds[i][e.action] = reward # これで予測値を上書き
-
         estimateds = np.array(estimateds)
         states = self.model.named_steps["preprocessing"].transform(states)
         self.model.named_steps["estimator"].partial_fit(states, estimateds) # 上書きした予測値で学習

@@ -1,19 +1,63 @@
 import random
 from random import randint
 
+class Node():
+    """
+    盤面をノード化する.
+    ノード同士を比較できるよう比較演算用関数をつける.
+    比較する値scoreは,スタートから自ノードまでの実コスト+自ノードからゴールまでの推定コスト.
+    """
+    def __init__(self,board,pre=None,action=None):
+        """
+        コンストラクタ.
+        board:盤面.
+        pre:親ノード.
+        action:親ノードから自ノードへ遷移する時の行動.
+        """
+        self.board = board
+        self.edge_length = int(len(board)**0.5)
+        self.pre = pre
+        self.action = action
+        self.cost = pre.cost + 1 if pre is not None else 0 # 初期位置からboardまでの実コスト
+        self.heuristic = self._get_heuristic() # boardからゴールまでの推定コスト（ヒューリスティック値）
+        self.score = self.heuristic + self.cost
+    
+    def _get_heuristic(self):
+        """
+        最終状態までの推定コストを返す.
+        """
+        ret=0
+        for i in range(self.edge_length):
+            for j in range(self.edge_length):
+                t = self.board[i * self.edge_length+j] - 1
+            ti,tj = divmod(t, self.edge_length)
+            ret += abs(i - ti) + abs(j - tj)
+        return ret
+
+    # Node比較用関数
+    def __le__(self,other):
+        return self.score <= other.score
+    def __ge__(self,other):
+        return self.score >= other.score
+    def __lt__(self,other):
+        return self.score < other.score
+    def __gt__(self,other):
+        return self.score > other.score
+    def __qe__(self,other):
+        return self.score == other.score
+
 class SquarePuzzle:
     """
     正方形パズルクラス
-    一辺の長さ=3の場合,以下が最終状態. 空白マスは0で表す.
+    一辺の長さ=3の場合,8パズルになる. 以下が最終状態. 空白マスは0で表す.
     1 2 3
     4 5 6
     7 8 0
     """
-    def __init__(self,edge_length=3,board=None,seed=None):
+    def __init__(self,edge_length=3,board=None):
         """
         edge_length:一辺の長さ.
         board:初期状態を指定する場合に使う. マスの配置を一次元化したもの.
-        seed:ランダムシードを指定する場合に使う.
         """
         if board is not None:
             assert len(board)==edge_length**2,f"invalid square. edge_length={edge_length} and board={board}"
@@ -23,8 +67,6 @@ class SquarePuzzle:
             board=[i+1 for i in range(edge_length**2)]
             board[-1]=0  
             self.space = edge_length ** 2 - 1
-        if seed is None:random.seed(seed)
-        self.seed = seed
         self.edge_length = edge_length
         self.board = board
         self.actions = [[0,1],[0,-1],[1,0],[-1,0]]
@@ -33,7 +75,7 @@ class SquarePuzzle:
     def reset(self,shuffle_count=100):
         """
         板を初期化する.
-        最終状態からshuffle_count回シャッフルする.
+        最終状態からshuffle_count回シャッフルする.shuffle_countが増えるほどパズルの難易度が上がる.
         """
         self.board=[i + 1 for i in range(self.edge_length ** 2)]
         self.board[-1]=0  
@@ -53,9 +95,9 @@ class SquarePuzzle:
     def step(self,action,air=False):
         """
         行動の結果(状態,報酬,終了フラグ,info)を返す.
+        指定の方向へ動かせない場合,状態を変えず返す.
         action:行動.空白マスを動かす方向を表す. {0:右,1:左,2:下,3:上}
         air:状態を変えずに行動の結果を取得したい場合Trueにする.
-        指定の方向へ動かせない場合,状態を変えず返す.
         """
         if not air:self.step_count += 1
         i,j = divmod(self.space,self.edge_length)
@@ -98,7 +140,10 @@ class SquarePuzzle:
         for i in range(self.edge_length):
             print(self.board[i*self.edge_length:(i+1)*self.edge_length])
 
-if __name__=='__main__':
+if __name__=='__main__1':
+    """
+    8パズルを遊ぶ.
+    """
     env = SquarePuzzle(3)
     env.reset()
     done = False
@@ -118,3 +163,23 @@ if __name__=='__main__':
     else:
         print("==== complete!! ===")
         env.show()
+
+if __name__=='__main__':
+    """
+    各ソルバーを比較する.
+    """
+    import time
+    board = [6, 0, 2, 7, 4, 1, 8, 3, 5]
+    from solver.bfs_solver import bfs_solver
+    from solver.a_star_solver import A_star_solver
+    from solver.iddfs_solver import IDDFS_solver
+    from solver.id_a_star_solver import ID_A_star_solver
+    solvers = (bfs_solver,A_star_solver,IDDFS_solver,ID_A_star_solver)
+    for solver in solvers:
+        env = SquarePuzzle(edge_length=3 ,board=board)
+        start = time.time()
+        actions,search_count = solver(env)
+        process_time = time.time() - start
+        print(f"{solver.__name__}:hands={len(actions)}, search_count={search_count}, process_time = {process_time}")
+
+
