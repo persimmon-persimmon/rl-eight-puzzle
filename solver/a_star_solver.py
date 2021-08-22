@@ -12,12 +12,17 @@ def A_star_solver(env,logger=None):
     A starアルゴリズムで解く.
     env:square puzzleインスタンス.
     logger:loggerインスタンス.
-    return:初期状態から最終状態までのaction配列.
+    -> return:解けたかどうかのフラグ,初期状態から最終状態までのaction配列,探索回数.
     """
     def log(message):
         if logger is not None:
             logger.info(message)
     board = env.get_state()
+
+    # はじめから最終状態のときの処理
+    if all(board[i]==(i+1)%(len(board)) for i in range(len(board))):
+        return True,[],0
+
     node = Node(board,pre=None,action=None)
     dist = {}
     dist[board] = node
@@ -44,21 +49,21 @@ def A_star_solver(env,logger=None):
     log("search end.")
     if end_node is None:
         log("no answer.")
-        return [],search_count
+        return False,[],search_count
     node = end_node
     actions = []
     while node.pre is not None:
         actions.append(node.action)
         node = node.pre
     actions.reverse()
-    return actions,search_count
+    return True,actions,search_count
 
 if __name__=='__main__':
     env = SquarePuzzle(edge_length=3)
     env.reset()
     logger = setup_logger(__file__)
     start = time.time()
-    actions,search_count = A_star_solver(env,logger)
+    flg,actions,search_count = A_star_solver(env,logger)
     process_time = time.time() - start
     for action in actions:
         env.show()

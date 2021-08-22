@@ -12,13 +12,13 @@ class Node():
         コンストラクタ.
         board:盤面.
         pre:親ノード.
-        action:親ノードから自ノードへ遷移する時の行動.
+        action:親ノードからこのノードへ遷移する時の行動.
         """
         self.board = board
         self.edge_length = int(len(board)**0.5)
         self.pre = pre
         self.action = action
-        self.cost = pre.cost + 1 if pre is not None else 0 # 初期位置からboardまでの実コスト
+        self.cost = pre.cost + 1 if pre is not None else 0 # 初期状態からこのノードまでの実コスト
         self.heuristic = self._get_heuristic() # boardからゴールまでの推定コスト（ヒューリスティック値）
         self.score = self.heuristic + self.cost
     
@@ -46,6 +46,54 @@ class Node():
     def __qe__(self,other):
         return self.score == other.score
 
+def all_solvable_boards():
+    """
+    すべての完成可能な盤面を返す. edge_length=3のみ.
+    空白マスの完成状態からのマンハッタン距離(=pt0)と
+    任意の2マスを置換できる場合の完成状態までの置換回数(=pt1)の偶奇が一致している場合、完成可能.
+    """
+    end_board = [1,2,3,4,5,6,7,8,0]
+    all_pat = []
+    todo = [[i] for i in range(9)]
+    while todo:
+        v=todo.pop()
+        for ni in range(9):
+            if ni not in v:
+                if len(v)+1==9:
+                    all_pat.append(v+[ni])
+                else:
+                    todo.append(v+[ni])
+    ret = []
+    for pat in all_pat:
+        pt0 = -1
+        for x in range(9):
+            if pat[x]==0:
+                i,j=divmod(x,3)
+                pt0 = 2 - i + 2 - j
+                break
+        pt1 = 0
+        g = [[] for _ in range(9)]
+        for x,y in zip(pat,end_board):
+            g[x].append(y)
+            g[y].append(x)
+        mi=set(range(9))
+        while mi:
+            v0=mi.pop()
+            todo=[v0]
+            count=1
+            while todo:
+                v=todo.pop()
+                for nv in g[v]:
+                    if nv in mi:
+                        mi.discard(nv)
+                        count += 1
+                        todo.append(nv)
+            pt1+=count-1
+        if pt0%2==pt1%2:
+            ret.append(pat)
+    return ret
+
+from random import randint
 class SquarePuzzle:
     """
     正方形パズルクラス
@@ -53,6 +101,7 @@ class SquarePuzzle:
     1 2 3
     4 5 6
     7 8 0
+    一辺の長さ=4の場合,15パズルになる.
     """
     def __init__(self,edge_length=3,board=None):
         """
@@ -170,16 +219,26 @@ if __name__=='__main__':
     """
     import time
     board = [6, 0, 2, 7, 4, 1, 8, 3, 5]
+    env = SquarePuzzle(edge_length=4)
+    env.reset()
+    board = env.board
+    print(board)
+
     from solver.bfs_solver import bfs_solver
     from solver.a_star_solver import A_star_solver
     from solver.iddfs_solver import IDDFS_solver
     from solver.id_a_star_solver import ID_A_star_solver
     solvers = (bfs_solver,A_star_solver,IDDFS_solver,ID_A_star_solver)
+    solvers = (A_star_solver,ID_A_star_solver)
+    from memory_profiler import memory_usage
+    import numpy as np
     for solver in solvers:
-        env = SquarePuzzle(edge_length=3 ,board=board)
+        env = SquarePuzzle(edge_length=4 ,board=board)
         start = time.time()
-        actions,search_count = solver(env)
+        #flg,actions,search_count = solver(env)
+        mem = memory_usage((solver,(env,)))
         process_time = time.time() - start
-        print(f"{solver.__name__}:hands={len(actions)}, search_count={search_count}, process_time = {process_time}")
+        #print(f"{solver.__name__}:hands={len(actions)}, search_count={search_count}, process_time = {process_time}, memory = {np.mean(mem)}")
+        print(f"{solver.__name__}:process_time = {process_time}, memory = {np.mean(mem)}")
 
 
