@@ -6,7 +6,7 @@ import json
 import random
 from collections import deque,defaultdict
 import numpy as np
-from square_puzzle import square_puzzle
+from square_puzzle import SquarePuzzle
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder,StandardScaler

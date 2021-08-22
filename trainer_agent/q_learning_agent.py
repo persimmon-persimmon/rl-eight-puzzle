@@ -3,7 +3,7 @@ import os
 current_dir=os.path.dirname(__file__)
 sys.path.append(os.path.join(current_dir,"../"))
 import json
-from square_puzzle import square_puzzle
+from square_puzzle import SquarePuzzle
 from collections import deque,defaultdict
 from agent_base import AgentBase
 import numpy as np
