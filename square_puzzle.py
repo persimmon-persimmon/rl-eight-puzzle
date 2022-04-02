@@ -30,6 +30,7 @@ class Node():
         for i in range(self.edge_length):
             for j in range(self.edge_length):
                 t = self.board[i * self.edge_length+j] - 1
+                t = len(self.board)-1 if t==-1 else t
             ti,tj = divmod(t, self.edge_length)
             ret += abs(i - ti) + abs(j - tj)
         return ret
@@ -43,7 +44,7 @@ class Node():
         return self.score < other.score
     def __gt__(self,other):
         return self.score > other.score
-    def __qe__(self,other):
+    def __eq__(self,other):
         return self.score == other.score
 
 def all_solvable_boards():
